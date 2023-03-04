@@ -10,40 +10,40 @@
 
 #define KERN_1D(nthreads) ((nthreads) + BLK_SIZE - 1) / BLK_SIZE, BLK_SIZE
 
-__global__ void dev_sum_reduce(float *g_idata, float *g_odata) {
+// __global__ void dev_sum_reduce(float *in, float *out) {
 
-    __shared__ float sdata[BLK_SIZE];
+//     __shared__ float shared[BLK_SIZE];
     
-    unsigned tid = threadIdx.x;
-    unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
+//     unsigned tid = threadIdx.x;
+//     unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
 
-    sdata[tid] = g_idata[i];
+//     shared[tid] = in[i];
     
-    __syncthreads();
+//     __syncthreads();
     
-    for (unsigned s = 1; s < blockDim.x; s *= 2) {
-        if (tid % (2 * s) == 0) {
+//     for (unsigned s = 1; s < blockDim.x; s *= 2) {
+//         if (tid % (2 * s) == 0) {
 
-            sdata[tid] += sdata[tid + s];
-        }
-        __syncthreads();
-    }
+//             shared[tid] += shared[tid + s];
+//         }
+//         __syncthreads();
+//     }
 
-    if (tid == 0) g_odata[blockIdx.x] = sdata[0];
-}
+//     if (tid == 0) out[blockIdx.x] = shared[0];
+// }
 
-float sum_reduce(Matrix m) {
-    unsigned len = m.wid * m.hgt;
+// float sum_reduce(Matrix m) {
+//     unsigned len = m.wid * m.hgt;
 
-    float sum = 0;
+//     float sum = 0;
 
-    float *part_sums;
-    cudaMalloc(&part_sums, BLK_SIZE * sizeof(float));
-    dev_sum_reduce<<<KERN_1D(len)>>>(m.elems, part_sums);
-    dev_sum_reduce<<<1, BLK_SIZE>>>(part_sums, part_sums);
-    cudaDeviceSynchronize();
+//     float *part_sums;
+//     cudaMalloc(&part_sums, BLK_SIZE * sizeof(float));
+//     dev_sum_reduce<<<KERN_1D(len)>>>(m.elems, part_sums);
+//     dev_sum_reduce<<<1, BLK_SIZE>>>(part_sums, part_sums);
+//     cudaDeviceSynchronize();
 
-    cudaMemcpy(&sum, part_sums, sizeof(float), cudaMemcpyDeviceToHost);
-    cudaFree(part_sums);
-    return sum;
-}
+//     cudaMemcpy(&sum, part_sums, sizeof(float), cudaMemcpyDeviceToHost);
+//     cudaFree(part_sums);
+//     return sum;
+// }

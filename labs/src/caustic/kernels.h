@@ -3,6 +3,6 @@
 
 #include "util.h"
 
-float sum_reduce(Matrix m);
+// float sum_reduce(Matrix m);
 
 #endif

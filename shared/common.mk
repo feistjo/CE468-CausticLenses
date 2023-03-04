@@ -295,12 +295,10 @@ ifeq ($(USECUFFT),1)
   endif
 endif
 
-ifeq ($(USECUBLAS),1)
-  ifeq ($(emu),1)
-    LIB += -lcublasemu
-  else
-    LIB += -lcublas
-  endif
+ifeq ($(emu),1)
+  LIB += -lcublasemu
+else
+  LIB += -lcublas
 endif
 
 # Lib/exe configuration
