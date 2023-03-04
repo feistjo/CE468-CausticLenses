@@ -2,10 +2,20 @@
 #define UTIL
 
 typedef struct {
-    unsigned int wid;
-    unsigned int hgt;
+    unsigned hgt;
+    unsigned wid;
     float* elems;
 } Matrix;
+
+typedef struct {
+    // a mesh is a 2D grid of hgt * wid elements
+    unsigned hgt;
+    unsigned wid;
+    // each element in the grid has an x, y, and z coordinate
+    float* x;
+    float* y;
+    float* z;
+} Mesh;
 
 #define IMG_DIM 512
 #define BLK_SIZE 512

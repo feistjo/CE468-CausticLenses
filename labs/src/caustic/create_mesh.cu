@@ -11,23 +11,23 @@
 #include "util.h"
 #include "kernels.h"
 
-int create_mesh(Matrix img) {
+int create_mesh(Matrix host_img) {
     cublasHandle_t ch = NULL;
     cudaStream_t stream = NULL;
     cublasCreate(&ch);
     cublasSetStream(ch, stream);
 
-    //create square mesh the size of image
-    Matrix mesh;
-    Matrix d_img = to_device(img);
+    Mesh mesh;
+    
+    Matrix img = to_device(host_img);
+    unsigned len = img.wid * img.hgt;
 
-    float mesh_sum = img.wid * img.hgt;
-    float image_sum = 0;
-    cublasSasum(ch, img.wid * img.hgt, d_img.elems, 1, &image_sum);
+    float mesh_sum = float(len);
+    float img_sum = 0;
+    cublasSasum(ch, len, img.elems, 1, &img_sum);
 
-    float boost_ratio = mesh_sum / image_sum;
-
-    //call multiply kernel to multiply each pixel by boost_ratio
+    float boost_ratio = mesh_sum / img_sum;
+    cublasSscal(ch, len, &boost_ratio, img.elems, 1);
 
     /*
     //iterations of algorithm
@@ -60,6 +60,6 @@ int create_mesh(Matrix img) {
     // write output file obj
     */
 
-    cudaFree(d_img.elems);
+    cudaFree(img.elems);
     return 0;
 }
