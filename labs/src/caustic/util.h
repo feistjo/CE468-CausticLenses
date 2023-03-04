@@ -17,10 +17,23 @@ typedef struct {
     float* z;
 } Mesh;
 
-#define IMG_DIM 512
-#define BLK_SIZE 512
-#define FLATTEN(row, col, n_cols) ((row) * (n_cols) + (col))
+typedef struct {
+    float x;
+    float y;
+    float z;
+} Point3D;
 
+#define IMG_DIM 512
+#define BLKSIZE_1D 256
+#define BLKSIZE_2D 16
+
+#define FLAT(row, col, n_cols) ((row) * (n_cols) + (col))
+#define N_BLK(nthreads, bsize) (((nthreads) + bsize - 1) / bsize)
+#define KERN_1D(nthreads) N_BLK(nthreads, B_SIZE_1D), B_SIZE_1D
+
+Matrix init_matrix(const unsigned hgt, const unsigned wid);
 Matrix to_device(const Matrix m);
+
+Mesh init_mesh(const unsigned hgt, const unsigned wid);
 
 #endif

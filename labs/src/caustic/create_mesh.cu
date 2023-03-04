@@ -11,16 +11,23 @@
 #include "util.h"
 #include "kernels.h"
 
+void optimize_mesh(Mesh mesh, Matrix mesh_area) {
+    get_mesh_area(mesh, mesh_area);
+
+    // TODO
+}
+
 int create_mesh(Matrix host_img) {
     cublasHandle_t ch = NULL;
     cudaStream_t stream = NULL;
     cublasCreate(&ch);
     cublasSetStream(ch, stream);
 
-    Mesh mesh;
+    unsigned len = host_img.hgt * host_img.wid;
+
+    Mesh mesh = init_mesh(host_img.hgt + 1, host_img.wid + 1);
     
     Matrix img = to_device(host_img);
-    unsigned len = img.wid * img.hgt;
 
     float mesh_sum = float(len);
     float img_sum = 0;
@@ -28,6 +35,10 @@ int create_mesh(Matrix host_img) {
 
     float boost_ratio = mesh_sum / img_sum;
     cublasSscal(ch, len, &boost_ratio, img.elems, 1);
+
+    Matrix mesh_area = init_matrix(host_img.hgt, host_img.wid);
+    // do until convergence
+    optimize_mesh(mesh, mesh_area);
 
     /*
     //iterations of algorithm
@@ -61,5 +72,6 @@ int create_mesh(Matrix host_img) {
     */
 
     cudaFree(img.elems);
+    cudaFree(mesh_area.elems);
     return 0;
 }

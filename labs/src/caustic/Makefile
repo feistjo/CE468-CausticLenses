@@ -43,10 +43,10 @@
 EXECUTABLE	:= causticlens
 
 # Cuda source files (compiled with cudacc)
-CUFILES		:= create_mesh.cu kernels.cu
+CUFILES		:= create_mesh.cu kernels.cu util.cu
 
 # C/C++ source files (compiled with gcc / c++)
-CCFILES		:= caustic_lens.cpp util.cpp pgma_io.cpp
+CCFILES		:= caustic_lens.cpp pgma_io.cpp
 
 ################################################################################
 # Rules and targets
