@@ -10,6 +10,8 @@
 
 Matrix to_device(const Matrix m) {
     Matrix m_d = m;
-    cudaMalloc((void**)&m_d.elems, m.wid * m.hgt * sizeof(float));
+    size_t len = m.wid * m.hgt * sizeof(float);
+    cudaMalloc((void **)&m_d.elems, len);
+    cudaMemcpy(m_d.elems, m.elems, len, cudaMemcpyHostToDevice);
     return m_d;
 }

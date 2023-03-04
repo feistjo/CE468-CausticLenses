@@ -21,7 +21,7 @@ int main() {
     Matrix img;
     img.hgt = hgt;
     img.wid = wid;
-    img.elems = (float*)malloc(hgt * wid * sizeof(float));
+    img.elems = (float *)malloc(hgt * wid * sizeof(float));
 
     for (int i = 0; i < hgt * wid; i++) {
         img.elems[i] = (float)pixels[i] / denominator;
@@ -29,4 +29,6 @@ int main() {
     }
 
     free(pixels);
+
+    create_mesh(img);
 }

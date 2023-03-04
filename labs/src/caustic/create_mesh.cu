@@ -11,13 +11,14 @@
 
 int create_mesh(Matrix img) {
     //create square mesh the size of image
-    Matrix meshy;
+    Matrix mesh;
+    Matrix d_img = to_device(img);
 
-    long mesh_sum = img.wid * img.hgt;
-    long image_sum = 0; //sum(image), parallelized?/tiled
+    float mesh_sum = img.wid * img.hgt;
+    float image_sum = sum_reduce(d_img);
+
     float boost_ratio = mesh_sum / image_sum;
 
-    Matrix img_d;
     //call multiply kernel to multiply each pixel by boost_ratio
 
     /*
@@ -51,5 +52,6 @@ int create_mesh(Matrix img) {
     // write output file obj
     */
 
-    return 0;
+   cudaFree(d_img.elems);
+   return 0;
 }
