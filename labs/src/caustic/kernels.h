@@ -3,6 +3,8 @@
 
 #include "util.h"
 
-void get_mesh_area(Mesh mesh, Matrix area);
+void scalar_add(const Matrix a, const float b, Matrix out);
+
+void compute_loss(Mesh mesh, Matrix img, Matrix loss);
 
 #endif

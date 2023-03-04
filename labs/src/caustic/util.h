@@ -29,7 +29,7 @@ typedef struct {
 
 #define FLAT(row, col, n_cols) ((row) * (n_cols) + (col))
 #define N_BLK(nthreads, bsize) (((nthreads) + bsize - 1) / bsize)
-#define KERN_1D(nthreads) N_BLK(nthreads, B_SIZE_1D), B_SIZE_1D
+#define KERN_1D(nthreads) N_BLK(nthreads, BLKSIZE_1D), BLKSIZE_1D
 
 Matrix init_matrix(const unsigned hgt, const unsigned wid);
 Matrix to_device(const Matrix m);
