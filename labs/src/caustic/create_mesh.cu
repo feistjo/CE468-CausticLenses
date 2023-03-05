@@ -11,8 +11,7 @@
 #include "util.h"
 #include "kernels.h"
 
-
-void optimize_mesh(cublasHandle_t ch, Matrix img, Mesh mesh, Matrix loss) {
+void optimize_mesh(Matrix img, Mesh mesh, Matrix loss, cublasHandle_t ch) {
     unsigned len = img.hgt * img.wid;
 
     compute_loss(mesh, img, loss);
@@ -22,7 +21,22 @@ void optimize_mesh(cublasHandle_t ch, Matrix img, Mesh mesh, Matrix loss) {
     cublasSasum(ch, len, loss.elems, 1, &loss_sum);
     scalar_add(loss, -loss_sum / len, loss);
 
-    // TODO: calculate phi and such
+    Matrix phi = init_matrix(img.hgt, img.wid);
+
+    // run until convergence
+    // TODO: only using 1 iteration right now
+    for (unsigned i = 0; i < 1; i++) {
+        float max_update = relax(phi, loss, ch);
+
+        printf("[%d]: Relaxed phi by %f\n", i, max_update);
+
+        if (max_update < 0.00001) {
+            printf("[%d]: Converged to optimal phi\n", i);
+            break;
+        }
+    }
+
+    // march mesh based on converged phi
 }
 
 int create_mesh(Matrix host_img) {
@@ -52,30 +66,9 @@ int create_mesh(Matrix host_img) {
 
     // optimize mesh until convergence
     // TODO: using only 1 iteration right now
-    optimize_mesh(ch, img, mesh, loss);
+    optimize_mesh(img, mesh, loss, ch);
 
     /*
-    //iterations of algorithm
-    for (int i = 0; i < 4; i++) {
-        Matrix D;
-        //call kernel to get pixel areas, subtract img, and subtract sum / (512*512) (for 512x512 image)
-        //can save loss images (quantifyLoss!)
-
-        Matrix phi;
-        //build phi
-        for (int i = 0; i < 10000; i++) {
-            float max_update;
-            //allocate max_update on device
-            //call kernel to relax
-
-            if (max_update < 0.00001) {
-                printf("Convergence reached at step %d with max_update %f\n", i, max_update);
-                break;
-            }
-        }
-        //call kernel to march mesh
-    }
-
     float artifact_size = 0.1;
     float focal_length = 0.2;
 

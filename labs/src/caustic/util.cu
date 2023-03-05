@@ -16,6 +16,7 @@ Matrix init_matrix(const unsigned hgt, const unsigned wid) {
     out.wid = wid;
 
     cudaMalloc((void **)&out.elems, n_bytes);
+    cudaMemset(out.elems, 0, n_bytes);
 
     return out;
 }
