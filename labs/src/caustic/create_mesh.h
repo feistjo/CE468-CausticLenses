@@ -3,6 +3,6 @@
 
 #include "util.h"
 
-int create_mesh(Matrix img);
+Mesh create_mesh(Matrix img);
 
 #endif

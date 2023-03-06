@@ -30,5 +30,8 @@ int main() {
 
     free(pixels);
 
-    create_mesh(img);
+    Mesh mesh = create_mesh(img);
+    // save_obj(mesh, std::cout);
+
+    // free_mesh(mesh);
 }

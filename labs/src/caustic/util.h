@@ -24,6 +24,7 @@ typedef struct {
 } Point3D;
 
 #define IMG_DIM 512
+#define MESH_DIM (IMG_DIM + 1)
 #define BLKSIZE_1D 256
 #define BLKSIZE_2D 16
 
@@ -35,5 +36,8 @@ Matrix init_matrix(const unsigned hgt, const unsigned wid);
 Matrix to_device(const Matrix m);
 
 Mesh init_mesh(const unsigned hgt, const unsigned wid);
+void free_mesh(Mesh mesh);
+
+void save_obj(Mesh mesh, std::ostream &f, float scale = 1.0f, float scalez = 1.0f);
 
 #endif

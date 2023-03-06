@@ -178,11 +178,11 @@ __device__ float atomicMin(float* address, float val)
         assumed = old;
         if (val < assumed)
         {
-            old = atomicCAS(adress, assumed, val);
+            old = atomicCAS((uint32_t*)address, *(uint32_t*)&assumed, *(uint32_t*)&val);
         }
 
     // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
-    } while (reinterpret_cast<int>(assumed) != reinterpret_cast<int>(old));
+    } while (*(int*)&assumed != *(int*)&old);
 
     return old;
 }
@@ -191,43 +191,43 @@ __global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *
     unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned j = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (!(i < IMG_DIM && j < IMG_DIM)) return;
+    if (!(i < MESH_DIM && j < MESH_DIM)) return;
 
-    unsigned idx = FLAT(i, j, IMG_DIM);
+    unsigned idx = FLAT(i, j, MESH_DIM);
 
     float vel_i, vel_j;
 
-    if (i == IMG_DIM - 1) {
+    if (i == MESH_DIM - 1) {
         vel_i = 0;
-    } else if (j == IMG_DIM - 1) {
+    } else if (j == MESH_DIM - 1) {
         vel_i = grad_i(i, j - 1, phi);
     } else {
-        vel_i = grad_i(i, j phi);
+        vel_i = grad_i(i, j, phi);
     }
 
-    if (j == IMG_DIM - 1) {
+    if (j == MESH_DIM - 1) {
         vel_j = 0;
-    } else if (i == IMG_DIM - 1) {
+    } else if (i == MESH_DIM - 1) {
         vel_j = grad_j(i - 1, j, phi);
     } else {
         vel_j = grad_j(i, j, phi);
     }
 
-    vel_x = -vel_j;
-    vel_y = -vel_i;
+    vel_x[idx] = vel_j;
+    vel_y[idx] = vel_i;
     
     __syncthreads();
 
     // mesh triangles
     unsigned tri[2][3];
     
-    tri[0][0] = FLAT(i, j, IMG_DIM);
-    tri[0][1] = FLAT(i, j + 1, IMG_DIM);
-    tri[0][2] = FLAT(i + 1, j, IMG_DIM);
+    tri[0][0] = FLAT(i, j, MESH_DIM);
+    tri[0][1] = FLAT(i, j + 1, MESH_DIM);
+    tri[0][2] = FLAT(i + 1, j, MESH_DIM);
     
-    tri[1][0] = FLAT(i + 1, j + 1, IMG_DIM);
-    tri[1][1] = FLAT(i + 1, j, IMG_DIM);
-    tri[1][2] = FLAT(i, j + 1, IMG_DIM);
+    tri[1][0] = FLAT(i + 1, j + 1, MESH_DIM);
+    tri[1][1] = FLAT(i + 1, j, MESH_DIM);
+    tri[1][2] = FLAT(i, j + 1, MESH_DIM);
 
     float t1 = 0;
     float t2 = 0;
@@ -266,18 +266,18 @@ __global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *
     __syncthreads();
     
     float delta = min_t / 2;
-    x[idx] += vel_x * delta;
-    y[idx] += vel_y * delta;
+    x[idx] += vel_x[idx] * delta;
+    y[idx] += vel_y[idx] * delta;
 }
 
 void march_mesh(Mesh mesh, Matrix phi) {
-    unsigned n_bytes = phi.hgt * phi.wid * sizeof(float);
+    unsigned n_bytes = mesh.hgt * mesh.wid * sizeof(float);
     float *vel_x;
     float *vel_y;
     cudaMalloc(&vel_x, n_bytes);
     cudaMalloc(&vel_y, n_bytes);
 
-    dim3 dimGrid(N_BLK(v.hgt, BLKSIZE_2D), N_BLK(v.wid, BLKSIZE_2D));
+    dim3 dimGrid(N_BLK(mesh.hgt, BLKSIZE_2D), N_BLK(mesh.wid, BLKSIZE_2D));
     dim3 dimBlk(BLKSIZE_2D, BLKSIZE_2D);
     dev_march_mesh<<<dimGrid, dimBlk>>>(mesh.x, mesh.y, mesh.z, phi.elems, vel_x, vel_y);
     cudaDeviceSynchronize();

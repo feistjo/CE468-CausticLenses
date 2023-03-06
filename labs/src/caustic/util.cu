@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
 
 #include <cuda_runtime_api.h>
 #include <cuda.h>
@@ -52,10 +53,44 @@ Mesh init_mesh(const unsigned hgt, const unsigned wid) {
     cudaMalloc((void **)&out.y, n_bytes);
     cudaMalloc((void **)&out.z, n_bytes);
 
-    dim3 dimGrid(N_BLK(out.hgt, BLKSIZE_2D), N_BLK(out.wid, BLKSIZE_2D));
+    dim3 dimGrid(N_BLK(hgt, BLKSIZE_2D), N_BLK(wid, BLKSIZE_2D));
     dim3 dimBlk(BLKSIZE_2D, BLKSIZE_2D);
     dev_init_mesh<<<dimGrid, dimBlk>>>(out.x, out.y, out.z);
     cudaDeviceSynchronize();
 
     return out;
+}
+
+void free_mesh(Mesh mesh) {
+    cudaFree(mesh.x);
+    cudaFree(mesh.y);
+    cudaFree(mesh.z);
+}
+
+void save_obj(Mesh mesh, std::ostream &f, float scale, float scalez) {
+    for (int i = 0; i < mesh.hgt * mesh.wid; i++)
+    {
+        f << "v " << mesh.x[i] * scale << " " << mesh.y[i] * scale << " " << mesh.z[i] * scalez << '\n';
+    }
+
+    for (int i = 0; i < mesh.hgt; i++)
+    {
+        for (int j = 0; j < mesh.wid; j++)
+        {
+            unsigned tri[2][3];
+    
+            tri[0][0] = FLAT(i, j, IMG_DIM);
+            tri[0][1] = FLAT(i, j + 1, IMG_DIM);
+            tri[0][2] = FLAT(i + 1, j, IMG_DIM);
+
+            tri[1][0] = FLAT(i + 1, j + 1, IMG_DIM);
+            tri[1][1] = FLAT(i + 1, j, IMG_DIM);
+            tri[1][2] = FLAT(i, j + 1, IMG_DIM);
+
+            f << "f " << tri[0][0] << " " << tri[0][1] << " " << tri[0][2] << '\n';
+            f << "f " << tri[1][0] << " " << tri[1][1] << " " << tri[1][2] << '\n';
+        }
+
+        f << "dims " << mesh.wid << " " << mesh.hgt << '\n';
+    }
 }

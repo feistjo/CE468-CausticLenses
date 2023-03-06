@@ -36,10 +36,10 @@ void optimize_mesh(Matrix img, Mesh mesh, Matrix loss, cublasHandle_t ch) {
         }
     }
 
-    march_mesh(mesh, phi);
+    // march_mesh(mesh, phi);
 }
 
-int create_mesh(Matrix host_img) {
+Mesh create_mesh(Matrix host_img) {
     // CUBLAS stuff
     cublasHandle_t ch = NULL;
     cudaStream_t stream = NULL;
@@ -80,5 +80,6 @@ int create_mesh(Matrix host_img) {
 
     cudaFree(img.elems);
     cudaFree(loss.elems);
-    return 0;
+
+    return mesh;
 }
