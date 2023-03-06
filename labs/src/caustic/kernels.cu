@@ -119,3 +119,169 @@ float relax(Matrix m, Matrix loss, cublasHandle_t ch) {
     cudaFree(deltas);
     return max_update;
 }
+
+inline __device__ float grad_i(unsigned i, unsigned j, float *phi) {
+    return i == IMG_DIM - 1 ? 0 : phi[FLAT(i + 1, j, IMG_DIM)] - phi[FLAT(i, j, IMG_DIM)];
+}
+
+inline __device__ float grad_j(unsigned i, unsigned j, float *phi) {
+    return j == IMG_DIM - 1 ? 0 : phi[FLAT(i, j + 1, IMG_DIM)] - phi[FLAT(i, j, IMG_DIM)];
+}
+
+inline __device__ void find_t(Point3D p1, Point3D p2, Point3D p3, Point3D dp1, Point3D dp2, Point3D dp3, float* t1, float* t2) {
+    float x1 = p2.x - p1.x;
+    float y1 = p2.y - p1.y;
+
+    float x2 = p3.x - p1.x;
+    float y2 = p3.y - p1.y;
+
+    float u1 = dp2.x - dp1.x;
+    float v1 = dp2.y - dp1.y;
+
+    float u2 = dp3.x - dp1.x;
+    float v2 = dp3.y - dp1.y;
+
+    float a = u1 * v2 - u2 * v1;
+    float b = x1 * v1 + y2 * u1 - x2 * v1 - y1 * u2;
+    float c = x1 * y2 - x2 * y1;
+
+    if (a != 0)
+    {
+        float quotient = (b*b) - (4*a*c);
+        if (quotient >= 0)
+        {
+            float d = sqrtf(quotient);
+            *t1 = (-b - d) / (2*a);
+            *t2 = (-b + d) / (2*a);
+            return;
+        }
+        else
+        {
+            *t1 = -123.0f;
+            *t2 = -123.0f;
+            return;
+        }
+    }
+    else
+    {
+        *t1 = -c / b;
+        *t2 = -c / b;
+        return;
+    }
+}
+
+__device__ float atomicMin(float* address, float val)
+{
+    float old = *address, assumed;
+
+    do {
+        assumed = old;
+        if (val < assumed)
+        {
+            old = atomicCAS(adress, assumed, val);
+        }
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (reinterpret_cast<int>(assumed) != reinterpret_cast<int>(old));
+
+    return old;
+}
+
+__global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *vel_x, float *vel_y) {
+    unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned j = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (!(i < IMG_DIM && j < IMG_DIM)) return;
+
+    unsigned idx = FLAT(i, j, IMG_DIM);
+
+    float vel_i, vel_j;
+
+    if (i == IMG_DIM - 1) {
+        vel_i = 0;
+    } else if (j == IMG_DIM - 1) {
+        vel_i = grad_i(i, j - 1, phi);
+    } else {
+        vel_i = grad_i(i, j phi);
+    }
+
+    if (j == IMG_DIM - 1) {
+        vel_j = 0;
+    } else if (i == IMG_DIM - 1) {
+        vel_j = grad_j(i - 1, j, phi);
+    } else {
+        vel_j = grad_j(i, j, phi);
+    }
+
+    vel_x = -vel_j;
+    vel_y = -vel_i;
+    
+    __syncthreads();
+
+    // mesh triangles
+    unsigned tri[2][3];
+    
+    tri[0][0] = FLAT(i, j, IMG_DIM);
+    tri[0][1] = FLAT(i, j + 1, IMG_DIM);
+    tri[0][2] = FLAT(i + 1, j, IMG_DIM);
+    
+    tri[1][0] = FLAT(i + 1, j + 1, IMG_DIM);
+    tri[1][1] = FLAT(i + 1, j, IMG_DIM);
+    tri[1][2] = FLAT(i, j + 1, IMG_DIM);
+
+    float t1 = 0;
+    float t2 = 0;
+    float t3 = 0;
+    float t4 = 0;
+
+    find_t({x[tri[0][0]],     y[tri[0][0]],     z[tri[0][0]]},
+           {x[tri[0][1]],     y[tri[0][1]],     z[tri[0][1]]},
+           {x[tri[0][2]],     y[tri[0][2]],     z[tri[0][2]]},
+           {vel_x[tri[0][0]], vel_y[tri[0][0]], 0           },
+           {vel_x[tri[0][1]], vel_y[tri[0][1]], 0           },
+           {vel_x[tri[0][2]], vel_y[tri[0][2]], 0           },
+           &t1, &t2);
+    
+    find_t({x[tri[1][0]],     y[tri[1][0]],     z[tri[1][0]]},
+           {x[tri[1][1]],     y[tri[1][1]],     z[tri[1][1]]},
+           {x[tri[1][2]],     y[tri[1][2]],     z[tri[1][2]]},
+           {vel_x[tri[1][0]], vel_y[tri[1][0]], 0           },
+           {vel_x[tri[1][1]], vel_y[tri[1][1]], 0           },
+           {vel_x[tri[1][2]], vel_y[tri[1][2]], 0           },
+           &t3, &t4);
+
+    __syncthreads();
+    __shared__ float min_t;
+    
+    float local_min_t = t1 < t2 ? t1 : t2;
+    local_min_t = local_min_t < t3 ? local_min_t : t3;
+    local_min_t = local_min_t < t4 ? local_min_t : t4;
+
+    if(idx == 0) min_t = local_min_t;
+    
+    __syncthreads();
+
+    if (idx != 0) atomicMin(&min_t, local_min_t);
+    
+    __syncthreads();
+    
+    float delta = min_t / 2;
+    x[idx] += vel_x * delta;
+    y[idx] += vel_y * delta;
+}
+
+void march_mesh(Mesh mesh, Matrix phi) {
+    unsigned n_bytes = phi.hgt * phi.wid * sizeof(float);
+    float *vel_x;
+    float *vel_y;
+    cudaMalloc(&vel_x, n_bytes);
+    cudaMalloc(&vel_y, n_bytes);
+
+    dim3 dimGrid(N_BLK(v.hgt, BLKSIZE_2D), N_BLK(v.wid, BLKSIZE_2D));
+    dim3 dimBlk(BLKSIZE_2D, BLKSIZE_2D);
+    dev_march_mesh<<<dimGrid, dimBlk>>>(mesh.x, mesh.y, mesh.z, phi.elems, vel_x, vel_y);
+    cudaDeviceSynchronize();
+
+    cudaFree(vel_x);
+    cudaFree(vel_y);
+}

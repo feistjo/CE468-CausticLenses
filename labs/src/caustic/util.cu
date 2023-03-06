@@ -37,7 +37,7 @@ __global__ void dev_init_mesh(float *x, float *y, float *z) {
 
     unsigned idx = FLAT(i, j, IMG_DIM);
     x[idx] = j;
-    y[idx] = IMG_DIM - i - 1;
+    y[idx] = i;
     z[idx] = 0;
 }
 

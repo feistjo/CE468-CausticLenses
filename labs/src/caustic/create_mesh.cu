@@ -36,7 +36,7 @@ void optimize_mesh(Matrix img, Mesh mesh, Matrix loss, cublasHandle_t ch) {
         }
     }
 
-    // march mesh based on converged phi
+    march_mesh(mesh, phi);
 }
 
 int create_mesh(Matrix host_img) {
