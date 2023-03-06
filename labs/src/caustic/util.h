@@ -35,8 +35,10 @@ typedef struct {
 Matrix init_matrix(const unsigned hgt, const unsigned wid);
 Matrix to_device(const Matrix m);
 
-Mesh init_mesh(const unsigned hgt, const unsigned wid);
-void free_mesh(Mesh mesh);
+Mesh init_mesh_on_dev(const unsigned hgt, const unsigned wid);
+Mesh to_host(Mesh mesh_d);
+void free_mesh_on_device(Mesh mesh);
+void free_mesh_on_host(Mesh mesh);
 
 void save_obj(Mesh mesh, std::ostream &f, float scale = 1.0f, float scalez = 1.0f);
 

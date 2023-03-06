@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <iostream>
+#include <fstream>
 
 #include <cuda.h>
 #include <cutil.h>
@@ -31,7 +32,11 @@ int main() {
     free(pixels);
 
     Mesh mesh = create_mesh(img);
-    // save_obj(mesh, std::cout);
 
-    // free_mesh(mesh);
+    std::ofstream f;
+    f.open("out.obj");
+    save_obj(mesh, f);
+    f.close();
+
+    free_mesh_on_host(mesh);
 }

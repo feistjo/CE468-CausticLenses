@@ -33,14 +33,14 @@ __global__ void dev_compute_loss(float *x, float *y, float *z, float *img, float
     unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned j = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (!(i < IMG_DIM && j < IMG_DIM)) return;
+    if (!(i < MESH_DIM - 1 && j < MESH_DIM - 1)) return;
 
     unsigned idx = FLAT(i, j, IMG_DIM);
     
-    unsigned tl = idx;
-    unsigned tr = FLAT(i, j + 1, IMG_DIM);
-    unsigned bl = FLAT(i + 1, j, IMG_DIM);
-    unsigned br = FLAT(i + 1, j + 1, IMG_DIM);
+    unsigned tl = FLAT(i, j, MESH_DIM);
+    unsigned tr = FLAT(i, j + 1, MESH_DIM);
+    unsigned bl = FLAT(i + 1, j, MESH_DIM);
+    unsigned br = FLAT(i + 1, j + 1, MESH_DIM);
 
     float cell_area = triangle_area({x[bl], y[bl], z[bl]}, {x[tr], y[tr], z[tr]}, {x[tl], y[tl], z[tl]})
                     + triangle_area({x[bl], y[bl], z[bl]}, {x[br], y[br], z[br]}, {x[tr], y[tr], z[tr]});
@@ -55,10 +55,29 @@ void compute_loss(Mesh mesh, Matrix img, Matrix loss) {
     cudaDeviceSynchronize();
 }
 
-__global__ void dev_relax(float *a, float *loss, float *deltas) {
+__device__ float atomicMax(float* address, float val)
+{
+    float old = *address, assumed;
+
+    do {
+        assumed = old;
+        if (val > assumed)
+        {
+            old = atomicCAS((uint32_t*)address, *(uint32_t*)&assumed, *(uint32_t*)&val);
+        }
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (*(int*)&assumed != *(int*)&old);
+
+    return old;
+}
+
+__global__ void dev_relax(float *a, float *loss, float *max_delta) {
     unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned j = blockIdx.y * blockDim.y + threadIdx.y;
 
+    __shared__ float cur_max;
+    
     if (!(i < IMG_DIM && j < IMG_DIM)) return;
 
     unsigned idx = FLAT(i, j, IMG_DIM);
@@ -99,25 +118,36 @@ __global__ void dev_relax(float *a, float *loss, float *deltas) {
     }
 
     float delta = OMEGA / count * (sum - (count * a[idx]) - loss[idx]);
-    deltas[idx] = delta;
     a[idx] += delta;
+    // if (idx == 0) printf("phi: %f\n", a[idx]);
+
+    if (idx == 0) cur_max = 0;
+
+    __syncthreads();
+
+    atomicMax(&cur_max, delta);
+
+    __syncthreads();
+
+    if (idx == 0) {
+        *max_delta = cur_max;
+    }
+    __syncthreads();
 }
 
-float relax(Matrix m, Matrix loss, cublasHandle_t ch) {
-    float *deltas;
-    cudaMalloc(&deltas, m.hgt * m.wid * sizeof(float));
+float relax(Matrix m, Matrix loss) {
+    float *max_delta;
+    cudaMalloc(&max_delta, sizeof(float));
 
     dim3 dimGrid(N_BLK(m.hgt, BLKSIZE_2D), N_BLK(m.wid, BLKSIZE_2D));
     dim3 dimBlk(BLKSIZE_2D, BLKSIZE_2D);
-    dev_relax<<<dimGrid, dimBlk>>>(m.elems, loss.elems, deltas);
+    dev_relax<<<dimGrid, dimBlk>>>(m.elems, loss.elems, max_delta);
     cudaDeviceSynchronize();
 
-    int idx_of_max;
-    float max_update;
-    cublasIsamax(ch, m.hgt * m.wid, deltas, 1, &idx_of_max);
-    cudaMemcpy(&max_update, deltas + idx_of_max, sizeof(float), cudaMemcpyDeviceToHost);
-    cudaFree(deltas);
-    return max_update;
+    float max_delta_h;
+    cudaMemcpy(&max_delta_h, max_delta, sizeof(float), cudaMemcpyDeviceToHost);
+    cudaFree(max_delta);
+    return max_delta_h;
 }
 
 inline __device__ float grad_i(unsigned i, unsigned j, float *phi) {
@@ -218,6 +248,8 @@ __global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *
     
     __syncthreads();
 
+    if (!(i < MESH_DIM - 1 && j < MESH_DIM - 1)) return;
+    
     // mesh triangles
     unsigned tri[2][3];
     
@@ -254,15 +286,15 @@ __global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *
 
     __shared__ float min_t;
     
+    if (idx == 0) min_t = 10000;
+
     float local_min_t = t1 < t2 ? t1 : t2;
     local_min_t = local_min_t < t3 ? local_min_t : t3;
     local_min_t = local_min_t < t4 ? local_min_t : t4;
 
-    if(idx == 0) min_t = local_min_t;
-    
     __syncthreads();
 
-    if (idx != 0) atomicMin(&min_t, local_min_t);
+    if (local_min_t >= 0) atomicMin(&min_t, local_min_t);
     
     __syncthreads();
     

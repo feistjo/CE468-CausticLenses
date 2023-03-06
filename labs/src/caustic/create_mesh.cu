@@ -25,8 +25,8 @@ void optimize_mesh(Matrix img, Mesh mesh, Matrix loss, cublasHandle_t ch) {
 
     // run until convergence
     // TODO: only using 1 iteration right now
-    for (unsigned i = 0; i < 1; i++) {
-        float max_update = relax(phi, loss, ch);
+    for (unsigned i = 0; i < 10; i++) {
+        float max_update = relax(phi, loss);
 
         printf("[%d]: Relaxed phi by %f\n", i, max_update);
 
@@ -51,7 +51,7 @@ Mesh create_mesh(Matrix host_img) {
     Matrix img = to_device(host_img);
 
     // The mesh stores the 3D position of each point on the lens
-    Mesh mesh = init_mesh(img.hgt + 1, img.wid + 1);
+    Mesh mesh = init_mesh_on_dev(img.hgt + 1, img.wid + 1);
     
     // calculate sums
     float mesh_sum = float(len);
@@ -66,7 +66,9 @@ Mesh create_mesh(Matrix host_img) {
 
     // optimize mesh until convergence
     // TODO: using only 1 iteration right now
-    optimize_mesh(img, mesh, loss, ch);
+    for (unsigned i = 0; i < 1; i++) {
+        optimize_mesh(img, mesh, loss, ch);
+    }
 
     /*
     float artifact_size = 0.1;
@@ -81,5 +83,7 @@ Mesh create_mesh(Matrix host_img) {
     cudaFree(img.elems);
     cudaFree(loss.elems);
 
-    return mesh;
+    Mesh mesh_h = to_host(mesh);
+    free_mesh_on_device(mesh);
+    return mesh_h;
 }

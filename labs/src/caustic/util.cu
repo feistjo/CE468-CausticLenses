@@ -42,7 +42,7 @@ __global__ void dev_init_mesh(float *x, float *y, float *z) {
     z[idx] = 0;
 }
 
-Mesh init_mesh(const unsigned hgt, const unsigned wid) {
+Mesh init_mesh_on_dev(const unsigned hgt, const unsigned wid) {
     unsigned n_bytes = hgt * wid * sizeof(float);
 
     Mesh out;
@@ -61,10 +61,31 @@ Mesh init_mesh(const unsigned hgt, const unsigned wid) {
     return out;
 }
 
-void free_mesh(Mesh mesh) {
+Mesh to_host(Mesh mesh_d) {
+    unsigned n_bytes = mesh_d.hgt * mesh_d.wid * sizeof(float);
+
+    Mesh out = mesh_d;
+
+    out.x = (float *)malloc(n_bytes);
+    out.y = (float *)malloc(n_bytes);
+    out.z = (float *)malloc(n_bytes);
+    cudaMemcpy(out.x, mesh_d.x, n_bytes, cudaMemcpyDeviceToHost);
+    cudaMemcpy(out.y, mesh_d.y, n_bytes, cudaMemcpyDeviceToHost);
+    cudaMemcpy(out.z, mesh_d.z, n_bytes, cudaMemcpyDeviceToHost);
+
+    return out;
+}
+
+void free_mesh_on_device(Mesh mesh) {
     cudaFree(mesh.x);
     cudaFree(mesh.y);
     cudaFree(mesh.z);
+}
+
+void free_mesh_on_host(Mesh mesh) {
+    free(mesh.x);
+    free(mesh.y);
+    free(mesh.z);
 }
 
 void save_obj(Mesh mesh, std::ostream &f, float scale, float scalez) {
@@ -73,9 +94,9 @@ void save_obj(Mesh mesh, std::ostream &f, float scale, float scalez) {
         f << "v " << mesh.x[i] * scale << " " << mesh.y[i] * scale << " " << mesh.z[i] * scalez << '\n';
     }
 
-    for (int i = 0; i < mesh.hgt; i++)
+    for (int i = 0; i < mesh.hgt - 1; i++)
     {
-        for (int j = 0; j < mesh.wid; j++)
+        for (int j = 0; j < mesh.wid - 1; j++)
         {
             unsigned tri[2][3];
     
