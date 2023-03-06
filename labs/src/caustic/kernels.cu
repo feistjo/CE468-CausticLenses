@@ -213,8 +213,8 @@ __global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *
         vel_j = grad_j(i, j, phi);
     }
 
-    vel_x[idx] = vel_j;
-    vel_y[idx] = vel_i;
+    vel_x[idx] = -vel_j;
+    vel_y[idx] = -vel_i;
     
     __syncthreads();
 
@@ -251,6 +251,7 @@ __global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *
            &t3, &t4);
 
     __syncthreads();
+
     __shared__ float min_t;
     
     float local_min_t = t1 < t2 ? t1 : t2;

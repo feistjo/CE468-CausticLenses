@@ -36,7 +36,7 @@ void optimize_mesh(Matrix img, Mesh mesh, Matrix loss, cublasHandle_t ch) {
         }
     }
 
-    // march_mesh(mesh, phi);
+    march_mesh(mesh, phi);
 }
 
 Mesh create_mesh(Matrix host_img) {
