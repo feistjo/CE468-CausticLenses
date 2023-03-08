@@ -72,13 +72,16 @@ __device__ float atomicMax(float* address, float val)
     return old;
 }
 
-__global__ void dev_relax(float *a, float *loss, float *max_delta) {
-    unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned j = blockIdx.y * blockDim.y + threadIdx.y;
-
-    __shared__ float cur_max;
+__global__ void dev_relax(float *a, float *loss, float *max_delta, bool even_odd) {
+    unsigned i = (blockIdx.x * blockDim.x) + threadIdx.x;
+    unsigned j = (blockIdx.y * blockDim.y) + threadIdx.y;
+    i *= 2;
+    if (j%2 != even_odd) i++;
     
-    if (!(i < IMG_DIM && j < IMG_DIM)) return;
+    if (!(i < IMG_DIM && j < IMG_DIM))
+    {
+        return;
+    }
 
     unsigned idx = FLAT(i, j, IMG_DIM);
 
@@ -121,30 +124,28 @@ __global__ void dev_relax(float *a, float *loss, float *max_delta) {
     a[idx] += delta;
     // if (idx == 0) printf("phi: %f\n", a[idx]);
 
-    if (idx == 0) cur_max = 0;
-
     __syncthreads();
 
-    atomicMax(&cur_max, delta);
-
-    __syncthreads();
-
-    if (idx == 0) {
-        *max_delta = cur_max;
-    }
+    atomicMax(max_delta, delta);
     __syncthreads();
 }
 
 float relax(Matrix m, Matrix loss) {
     float *max_delta;
+    float max_delta_h = 0;
     cudaMalloc(&max_delta, sizeof(float));
+    cudaMemcpy(max_delta, &max_delta_h, sizeof(float), cudaMemcpyHostToDevice);
 
-    dim3 dimGrid(N_BLK(m.hgt, BLKSIZE_2D), N_BLK(m.wid, BLKSIZE_2D));
+    dim3 dimGrid(N_BLK(m.hgt, BLKSIZE_2D) / 2, N_BLK(m.wid, BLKSIZE_2D));
     dim3 dimBlk(BLKSIZE_2D, BLKSIZE_2D);
-    dev_relax<<<dimGrid, dimBlk>>>(m.elems, loss.elems, max_delta);
+    dev_relax<<<dimGrid, dimBlk>>>(m.elems, loss.elems, max_delta, 0);
     cudaDeviceSynchronize();
+        cudaMemcpy(&max_delta_h, max_delta, sizeof(float), cudaMemcpyDeviceToHost);
+    printf("Max delta 1: %f\n", max_delta_h);
+    dev_relax<<<dimGrid, dimBlk>>>(m.elems, loss.elems, max_delta, 1);
+    cudaDeviceSynchronize();
+    //printf("Relaxed\n");
 
-    float max_delta_h;
     cudaMemcpy(&max_delta_h, max_delta, sizeof(float), cudaMemcpyDeviceToHost);
     cudaFree(max_delta);
     return max_delta_h;
@@ -217,7 +218,7 @@ __device__ float atomicMin(float* address, float val)
     return old;
 }
 
-__global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *vel_x, float *vel_y) {
+__global__ void dev_prepare_march_mesh(float *x, float *y, float *z, float *phi, float *vel_x, float *vel_y, float *min_t) {
     unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned j = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -284,21 +285,24 @@ __global__ void dev_march_mesh(float *x, float *y, float *z, float *phi, float *
 
     __syncthreads();
 
-    __shared__ float min_t;
-    
-    if (idx == 0) min_t = 10000;
-
     float local_min_t = t1 < t2 ? t1 : t2;
     local_min_t = local_min_t < t3 ? local_min_t : t3;
     local_min_t = local_min_t < t4 ? local_min_t : t4;
 
     __syncthreads();
 
-    if (local_min_t >= 0) atomicMin(&min_t, local_min_t);
-    
-    __syncthreads();
-    
-    float delta = min_t / 2;
+    if (local_min_t >= 0) atomicMin(min_t, local_min_t);
+}
+
+__global__ void dev_march_mesh(float *x, float *y, float *vel_x, float *vel_y, float *min_t) {
+    unsigned i = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned j = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (!(i < MESH_DIM && j < MESH_DIM)) return;
+
+    unsigned idx = FLAT(i, j, MESH_DIM);
+
+    float delta = *min_t / 2;
     x[idx] += vel_x[idx] * delta;
     y[idx] += vel_y[idx] * delta;
 }
@@ -307,14 +311,22 @@ void march_mesh(Mesh mesh, Matrix phi) {
     unsigned n_bytes = mesh.hgt * mesh.wid * sizeof(float);
     float *vel_x;
     float *vel_y;
+    float *min_t;
+
     cudaMalloc(&vel_x, n_bytes);
     cudaMalloc(&vel_y, n_bytes);
+    cudaMalloc(&min_t, sizeof(float));
+    float min_t_h = 10000;
+    cudaMemcpy(min_t, &min_t_h, sizeof(float), cudaMemcpyHostToDevice);
 
     dim3 dimGrid(N_BLK(mesh.hgt, BLKSIZE_2D), N_BLK(mesh.wid, BLKSIZE_2D));
     dim3 dimBlk(BLKSIZE_2D, BLKSIZE_2D);
-    dev_march_mesh<<<dimGrid, dimBlk>>>(mesh.x, mesh.y, mesh.z, phi.elems, vel_x, vel_y);
+    dev_prepare_march_mesh<<<dimGrid, dimBlk>>>(mesh.x, mesh.y, mesh.z, phi.elems, vel_x, vel_y, min_t);
+    cudaDeviceSynchronize();
+    dev_march_mesh<<<dimGrid, dimBlk>>>(mesh.x, mesh.y, vel_x, vel_y, min_t);
     cudaDeviceSynchronize();
 
     cudaFree(vel_x);
     cudaFree(vel_y);
+    cudaFree(min_t);
 }
