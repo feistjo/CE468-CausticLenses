@@ -28,10 +28,10 @@ void optimize_mesh(Matrix img, Mesh mesh, Matrix loss, cublasHandle_t ch) {
     for (unsigned i = 0; i < 10; i++) {
         float max_update = relax(phi, loss);
 
-        printf("[%d]: Relaxed phi by %f\n", i, max_update);
+        //printf("[%d]: Relaxed phi by %f\n", i, max_update);
 
         if (max_update < 0.00001) {
-            printf("[%d]: Converged to optimal phi\n", i);
+            //printf("[%d]: Converged to optimal phi\n", i);
             break;
         }
     }

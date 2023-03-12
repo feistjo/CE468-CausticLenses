@@ -141,7 +141,7 @@ float relax(Matrix m, Matrix loss) {
     dev_relax<<<dimGrid, dimBlk>>>(m.elems, loss.elems, max_delta, 0);
     cudaDeviceSynchronize();
         cudaMemcpy(&max_delta_h, max_delta, sizeof(float), cudaMemcpyDeviceToHost);
-    printf("Max delta 1: %f\n", max_delta_h);
+    //printf("Max delta 1: %f\n", max_delta_h);
     dev_relax<<<dimGrid, dimBlk>>>(m.elems, loss.elems, max_delta, 1);
     cudaDeviceSynchronize();
     //printf("Relaxed\n");
